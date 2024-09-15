@@ -1,0 +1,174 @@
+#!/bin/bash
+
+# Variables
+readonly program_name=$(basename "$0")
+readonly CONFIG_DIR="$HOME/.config/gitup"
+readonly CONFIG_FILE="$CONFIG_DIR/config"
+readonly EDITOR="${EDITOR:=nano}"
+SOURCE=""
+DEST=""
+
+#colors
+R='\e[1;31m' # red
+G='\e[1;32m' # green
+W='\e[1;37m' # white bold
+off='\e[0m'  # turn off color
+t='       '    # tab
+OK=" $W[$G - $W]$off"
+EXC=" $W[$R ! $W]$off"
+
+function show_help() {
+    printf  "${off}Usage: ${W}gitup${off} [-hv] [-b|-r [home|pkgs]
+    -h               print this usage
+    -s               set source directory
+    -d               set destination directory
+    -c               open config file\n"
+}
+
+function error() {
+    printf "${program_name}: $*\n" >&2
+}
+
+function check_internet() {
+    if ping -q -w 1 -c 1 8.8.8.8 &> /dev/null;then
+        return 0
+    fi
+    return 1
+}
+
+function install_dependencies()
+{
+    # checking net connection
+    if check_internet ; then
+        printf  "${EXC} Installing Dependencies...\n"
+
+        apt-get update  && apt-get upgrade -y
+        apt-get install -y tar git
+
+        if  [[ $(type -P tar) && $(type -P git) ]];then
+            printf  "${OK} Dependencies Installed...\n"
+        fi
+
+    else
+        error "network connection failed"
+        exit 1
+    fi
+}
+
+function source_config() {
+    # create config directory if not exists already
+    mkdir -p $CONFIG_DIR
+    # create config if not exists
+    if [ ! -f "$CONFIG_FILE" ]; then
+        touch "$CONFIG_FILE"
+        printf 'REPOSITORY=""\n' > "$CONFIG_FILE" 
+        printf 'PERSONAL_ACCESS_TOKEN=""' >> "$CONFIG_FILE" 
+        # Edit config file
+        ${EDITOR} "$CONFIG_FILE"
+        exit 1
+    fi
+    source "$CONFIG_FILE"
+}
+
+function check_config() {
+    if [[ -z "$REPOSITORY" || -z "$PERSONAL_ACCESS_TOKEN" ]]; then
+        error "wrong configuration"
+        ${EDITOR} "$CONFIG_FILE"
+        exit 1
+    fi
+}
+
+function check_source_directory() {
+    if [ -z $SOURCE ]; then
+        error "Source not provided"
+        exit 1
+    elif [ ! -d $SOURCE ]; then
+        error "Source is not a valid directory"
+        exit 1
+    fi
+}
+
+function check_destination_directory() {
+    if [ -z $DEST ]; then
+        error "Destination not provided"
+        exit 1
+    elif [ ! -d $DEST ]; then
+        error "Destination is not a valid directory"
+        exit 1
+    fi
+} 
+
+function backup() {
+    printf  "${EXC} Backing up\n"
+    printf  "${t}Be patient...\n\n"
+
+    if tar -cf ${DEST}/backup.tmp -C ${SOURCE} . ; then
+        mv ${DEST}/backup.tmp "${DEST}/backup_$(date '+%Y_%M_%d_%H_%M').tar"
+        printf  "${OK} home backed up and can be found in\n"
+        printf  "${t}${DEST}/home.bak\n\n"
+
+    else
+        error "backup failed."
+    fi
+}
+
+function setup_git() {
+    cd "$DEST"
+
+    if [ ! -d ".git" ]; then
+        printf "${OK} Initializing a new git repository.\n"
+        git init
+    fi
+
+    git remote set-url origin "https://${PERSONAL_ACCESS_TOKEN}@github.com/${REPOSITORY}.git"
+
+}
+
+function remote_backup() {
+    git add .
+    git commit -m "backup $(date '+%Y-%M-%d %H:%M' )"
+    git push origin main
+}
+
+# remove temporary files in SOURCE if any signal received.
+function cleanup() {
+    rm -f "${DEST}/backup.tmp"
+    error  "\nprogramme terminated unexpectedly\n"
+    exit 1
+}
+
+# trapping signal
+trap cleanup  1 2 3 15 20
+
+# installing required programmes
+if  ! [[ $(type -P tar) && $(type -P git) ]];then
+    install_dependencies
+fi
+
+# Source config
+source_config
+check_config
+
+while getopts ":hs:d:c" opt ; do
+    case "${opt}" in
+        h ) show_help ;;
+        c ) ${EDITOR} "${CONFIG_FILE}" ;;
+        s ) SOURCE="${OPTARG}" ;;
+        d ) DEST="${OPTARG}" ;;
+        \?) error "unknown option\n"; exit 1 ;;
+        : ) error "insufficient arguments"; show_help; exit 1 ;;
+    esac
+done
+
+# Verify source directory
+check_source_directory
+
+# Verify destination directory
+check_destination_directory
+
+# Initiate backup
+backup
+
+# Init git at destination
+setup_git
+remote_backup
