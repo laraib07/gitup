@@ -18,11 +18,14 @@ OK=" $W[$G - $W]$off"
 EXC=" $W[$R ! $W]$off"
 
 function show_help() {
-    printf  "${off}Usage: ${W}gitup${off} [-hv] [-b|-r [home|pkgs]
+    printf  "${off}Usage: ${W}gitup${off} [-hc] [-s source] [-d destination]
     -h               print this usage
     -s               set source directory
     -d               set destination directory
-    -c               open config file\n"
+    -c               open config file\n\n"
+    printf "In config file set it as the example below:\n
+    REPOSITORY='user_name/repository_name'
+    PERSONAL_ACCESS_TOKEN='github_pat_token'\n"
 }
 
 function error() {
@@ -151,8 +154,8 @@ check_config
 
 while getopts ":hs:d:c" opt ; do
     case "${opt}" in
-        h ) show_help ;;
-        c ) ${EDITOR} "${CONFIG_FILE}" ;;
+        h ) show_help ; exit 1 ;;
+        c ) ${EDITOR} "${CONFIG_FILE}"; exit 1 ;;
         s ) SOURCE="${OPTARG}" ;;
         d ) DEST="${OPTARG}" ;;
         \?) error "unknown option\n"; exit 1 ;;
