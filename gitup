@@ -106,7 +106,7 @@ function backup() {
     printf  "${t}Be patient...\n\n"
 
     if tar -cf ${DEST}/backup.tmp -C ${SOURCE} . ; then
-        mv ${DEST}/backup.tmp "${DEST}/backup_$(date '+%Y_%M_%d_%H_%M').tar"
+        mv ${DEST}/backup.tmp "${DEST}/backup_$(date '+%Y_%m_%d_%H_%M').tar"
         printf  "${OK} home backed up and can be found in\n"
         printf  "${t}${DEST}/home.bak\n\n"
 
